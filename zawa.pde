@@ -5,13 +5,15 @@ import java.awt.*;
 Capture video;
 OpenCV opencv;
 
+// 画面サイズ
 final int WIDTH = 640;
 final int HEIGHT = 480;
 
-MovePoint point = new MovePoint();
+FacePoint point = new FacePoint();
 
 void settings() {
   size(WIDTH, HEIGHT);
+  imageMode(CENTER);
 }
 
 void setup() {
@@ -21,6 +23,7 @@ void setup() {
     //使用できるカメラのリスト
     cameras = Capture.list();
 
+    // 検出までリトライ
     if (cameras.length == 0) {
       println("No device detected. Wait and retry.");
       delay(100);
@@ -39,11 +42,6 @@ void setup() {
 
   //キャプチャを開始
   video.start(); 
-
-  // 検出領域を表示する設定
-  noFill();
-  stroke(0, 255, 0);
-  strokeWeight(3);
 }
 
 void draw() {
@@ -53,26 +51,17 @@ void draw() {
 
   // カメラの取得結果を表示
   opencv.loadImage(video); //ビデオ画像をメモリに展開
-  image(video, 0, 0);
+  image(video, WIDTH/2,HEIGHT/2);
 
   // 顔を検出
   Rectangle[] faces = opencv.detect();
   if (faces.length != 0) {
     Rectangle face = faces[0];
-    noFill();
-    stroke(0, 255, 0);
-    strokeWeight(3);
-    rect(face.x, face.y, face.width, face.height);
-
-    float face_center_x = face.x + face.width / 2.0;
-    float face_center_y = face.y + face.height / 2.0;
-    point.update(face_center_x, face_center_y);
-
-    float alpha = point.velocity(0, 100) * 255;
-    fill(255, 0, 0, alpha);
-    noStroke();
-    rect(0, 0, WIDTH, HEIGHT);
+    point.update(face);
   }
+  
+  // 画像表示
+  point.showImage();
 }
 
 void captureEvent(Capture c) {
