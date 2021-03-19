@@ -6,7 +6,7 @@ class Face {
   Rectangle faceArea;
   
   // 良とする顔検出領域のサイズの一辺の長さの下限しきい値
-  int detectionSizeThreshold = 250;
+  int detectionSizeThreshold = DETECTION_SIZE_THRESHOLD;
   // 最後に良となるサイズの顔領域が検出された時間
   int lastDetectedTime;
   // 前フレームでは良判定だったか
