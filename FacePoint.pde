@@ -1,65 +1,121 @@
-class FacePoint {
+class Face {
   PImage ikemen, inoue;
   
-  PVector previous;
-  PVector current;
-  float dist_threshold; // 次フレームでの検出位置の移動距離の限界
+  PVector previousPosition = new PVector();
+  PVector currentPosition;
+  Rectangle faceArea;
   
-  FacePoint() {
-    ikemen = loadImage("ikemen.png");
-    inoue = loadImage("inoue.png");
-    
-    this.previous = new PVector();
-    this.dist_threshold = 100.0;
+  // 良とする顔検出領域のサイズの一辺の長さの下限しきい値
+  int detectionSizeThreshold = 250;
+  // 最後に良となるサイズの顔領域が検出された時間
+  int lastDetectedTime;
+  // 前フレームでは良判定だったか
+  boolean wasOk = false;
+  
+  float score = 0.5; // 0.0～1.0
+  
+  Face(PImage ikemen, PImage inoue) {
+    this.ikemen = ikemen;
+    this.inoue = inoue;
   }
   
-  void update(Rectangle face) {
-    float current_x = face.x + face.width / 2.0;
-    float current_y = face.y + face.height / 2.0;
+  void update(Rectangle faceArea) {
+    float currentPositionX = faceArea.x + faceArea.width / 2.0;
+    float currentPositionY = faceArea.y + faceArea.height / 2.0;
     
-    if (this.current == null) {
+    if (this.currentPosition == null) {
       // 最初は必ず更新する
-      this.current = new PVector(current_x, current_y);
+      this.currentPosition = new PVector(currentPositionX, currentPositionY);
+      this.faceArea = faceArea;
       return;
     }
     
-    // 変な位置に検出されたら無視する
-    float dist = this.current.dist(new PVector(current_x, current_y)); 
-    if (dist > this.dist_threshold) {
-      println("Too far! Skip point updating. dist: " + dist);
+    // 変な位置が検出されたら無視する
+    float dist = this.currentPosition.dist(new PVector(currentPositionX, currentPositionY));
+    if (dist > DETECTION_DISTANCE_THRESHOLD) {
+      println("Too far! Skip updating position. dist: " + dist);
       return;
     }
     
-    this.previous.set(this.current);
-    this.current.set(current_x, current_y);
+    this.previousPosition.set(this.currentPosition);
+    this.currentPosition.set(currentPositionX, currentPositionY);
+    this.faceArea = faceArea;
+    
+    if (this.isOk()) {
+      this.score = this.score(ELAPSED_TIME_RANGE[1], ELAPSED_TIME_RANGE[0]);
+      this.lastDetectedTime = millis();
+      detected_flag = true;
+    }
     
     // 検出領域を表示
-    noFill();
-    stroke(0, 255, 0);
-    strokeWeight(3);
-    rect(face.x, face.y, face.width, face.height);
-  }
-  
-  // This returns a float value between 0.0 and 1.0
-  float velocity(float min, float max) {
-    float dist = abs(this.current.y - this.previous.y);
-    return map(dist, min,max, 0,1);
+    if (DEBUG_SHOW_DETECTED_AREA_FLAG) {
+      noFill();
+      stroke(0, 255, 0);
+      strokeWeight(3);
+      rect(faceArea.x, faceArea.y, faceArea.width, faceArea.height);
+    }
   }
   
   void showImage() {
-    float alpha = this.velocity(0, 100) * 255;
-    if (ikemen != null && inoue != null) {
-      // velocityが大きいほどイケメン画像を濃く表示
+    // 初期化されていなければスキップ
+    if (this.currentPosition == null) { return; }
+    
+    surface.setTitle("score: " + nf(this.score, 1,3) + "");
+    
+    float alpha = this.score * 255;
+    if (DEBUG_NO_IMAGE_FLAG || ikemen != null && inoue != null) {
+      // scoreが大きいほどイケメン画像を濃く表示
       tint(255, alpha);
-      image(ikemen, current.x, current.y);
-      // velocityが大きいほど井上の画像を薄く表示
+      this.displayImage(this.ikemen, currentPosition.x, currentPosition.y);
+      // scoreが小さいほど井上の画像を薄く表示
       tint(255, 255 - alpha);
-      image(inoue, current.x, current.y);
+      this.displayImage(this.inoue, currentPosition.x, currentPosition.y);
     } else {
       // 画像が取得されていない場合
-      fill(255, 0, 0, alpha);
+      fill(255, 0, 0, 255-alpha);
       noStroke();
-      rect(0, 0, WIDTH, HEIGHT);
+      rect(faceArea.x, faceArea.y, faceArea.width, faceArea.height);
     }
+  }
+  
+  // 顔検出領域のサイズがしきい値以上か
+  boolean isOk() {
+    boolean isOk = this.detectionSizeThreshold <= min(this.faceArea.width, this.faceArea.height); 
+    if (!wasOk && isOk) { // 前回はしきい値未満でかつ今回はしきい値以上の場合
+      this.wasOk = true;
+      
+      // 前回の良判定から一定時間経過している必要がある
+      int elapsedTime = millis() - this.lastDetectedTime;
+      if (elapsedTime > DETECTION_TIME_THRESHOLD) {
+        return true;
+      }
+    } else {
+      this.wasOk = isOk;
+    }
+    return false;
+  }
+  
+  // This returns a float value between 0.0 and 1.0
+  float score(float bad, float good) {
+    // 前回の検出からの経過時間（上限下限をELAPSED_TIME_RANGEの値に制限している）
+    int elapsedTime = constrain(millis() - this.lastDetectedTime, ELAPSED_TIME_RANGE[0],ELAPSED_TIME_RANGE[1]);
+    return map(elapsedTime, bad,good, 0,1);
+  }
+  
+  void displayImage(PImage img, float posX, float posY) {
+    float xScale = (float)this.faceArea.width / img.width;
+    float yScale = (float)this.faceArea.height / img.height;
+    pushMatrix();
+      translate(posX, posY);
+      scale(xScale, yScale);
+      image(img, 0,0);
+    popMatrix();
+  }
+  
+  int changeDetectionSizeThreshold() {
+    // 直前に検出されている領域サイズを検出サイズしきい値とする
+    // 基本的に正方形だが、念のため縦横の大きい方で設定する
+    this.detectionSizeThreshold = max(this.faceArea.width, this.faceArea.height);
+    return this.detectionSizeThreshold;
   }
 }

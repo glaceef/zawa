@@ -5,28 +5,34 @@ import java.awt.*;
 Capture video;
 OpenCV opencv;
 
-// 画面サイズ
-final int WIDTH = 640;
-final int HEIGHT = 480;
+Face face;
 
-FacePoint point = new FacePoint();
+boolean detected_flag = false;
 
 void settings() {
-  size(WIDTH, HEIGHT);
-  imageMode(CENTER);
+  size(WIDTH, HEIGHT, FX2D);
 }
 
 void setup() {
+  imageMode(CENTER);
+  
+  PImage ikemen, inoue;
+  if (!DEBUG_NO_IMAGE_FLAG) {
+    ikemen = loadImage("ikemen.jpg");
+    inoue = loadImage("inoue.jpg");
+  }
+  face = new Face(ikemen, inoue);
+  
   String[] cameras;
 
   while (true) {
     //使用できるカメラのリスト
     cameras = Capture.list();
 
-    // 検出までリトライ
+    // 取得までリトライ
     if (cameras.length == 0) {
       println("No device detected. Wait and retry.");
-      delay(100);
+      delay(DELAY_TIME);
       continue;
     }
 
@@ -51,19 +57,32 @@ void draw() {
 
   // カメラの取得結果を表示
   opencv.loadImage(video); //ビデオ画像をメモリに展開
+  tint(-1, 255);
   image(video, WIDTH/2,HEIGHT/2);
 
   // 顔を検出
   Rectangle[] faces = opencv.detect();
   if (faces.length != 0) {
-    Rectangle face = faces[0];
-    point.update(face);
+    Rectangle faceArea = faces[0];
+    face.update(faceArea);
   }
   
   // 画像表示
-  point.showImage();
+  face.showImage();
+  
+  if (DEBUG_EMPHASIZE_DETECTED_TIMING_FLAG && detected_flag) {
+    // 顔検出が良判定になったタイミングの確認用。一瞬赤くなる
+    noStroke();
+    fill(255,0,0, 150);
+    rect(0,0,WIDTH,HEIGHT);
+    detected_flag = false;
+  }
 }
 
 void captureEvent(Capture c) {
   c.read();
+}
+
+void mousePressed() {
+  println("Set detection size threshold = " + face.changeDetectionSizeThreshold());
 }
